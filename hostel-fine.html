@@ -142,6 +142,7 @@ body::before {
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(107,29,60,0.25); }
 .btn-primary:hover:not(:disabled) { opacity: 0.88; box-shadow: 0 4px 12px rgba(107,29,60,0.3); }
+.row-actions { display: flex; gap: 6px; align-items: center; }
 .btn-row-apply {
   background: var(--primary-light); color: var(--primary);
   border: 1.5px solid var(--primary-mid); border-radius: 7px;
@@ -150,6 +151,19 @@ body::before {
 }
 .btn-row-apply:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 .btn-row-apply:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-row-remove {
+  background: transparent; color: var(--danger);
+  border: 1.5px solid rgba(192,57,43,0.35); border-radius: 7px;
+  padding: 5px 10px; font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.btn-row-remove:hover { background: var(--danger-bg); border-color: var(--danger); }
+.btn-row-remove:disabled { opacity: 0.45; cursor: not-allowed; }
+.removed-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--fg-muted); font-size: 12px; font-weight: 500;
+  background: var(--bg); border-radius: 20px; padding: 3px 10px;
+}
 
 /* ── Table ── */
 .table-wrap { overflow-x: auto; min-width: 0; }
@@ -325,6 +339,33 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
     </div>
   </div>
 
+  <!-- Report -->
+  <div class="card" id="report-card" hidden>
+    <div class="card-title">Fine Applied Report</div>
+    <div id="report-meta" style="display:flex;gap:20px;margin-bottom:14px;flex-wrap:wrap;"></div>
+    <div class="table-wrap">
+      <table id="report-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Student</th>
+            <th>Reg No</th>
+            <th>Course / Batch</th>
+            <th>Installment</th>
+            <th style="text-align:right">Fine (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="report-body"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="printReport()" style="gap:6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print / Save PDF
+      </button>
+    </div>
+  </div>
+
   <div class="footer">
     Powered by
     <img src="https://okiedokie-erp-images.s3.ap-south-1.amazonaws.com/Okie%20Dokie/2025/12/sourceURL/26aebcbe10f4ac5a3e8b-611ed1b9032568edd4f3-Okie_Dokie_App_icon__2___2_-removebg-preview.png" alt="Okie Dokie">
@@ -434,10 +475,12 @@ function renderTable() {
     const fine = studentFines.has(id) ? studentFines.get(id) : (globalFine || '');
     const result = resultMap.get(id);
     const statusHtml = result
-      ? (result.ok
-          ? '<span class="ok-status">✓ Applied</span>'
-          : `<span class="err-status" title="${h(result.msg)}">✗ ${h(result.msg||'Failed')}</span>`)
-      : `<button class="btn-row-apply" id="apply-btn-${h(id)}" onclick="event.stopPropagation();applyOne('${h(id)}')" type="button">Apply</button>`;
+      ? (result.removed
+          ? `<div class="row-actions"><span class="removed-status">Fine Removed</span><button class="btn-row-apply" onclick="event.stopPropagation();applyOne('${h(id)}')" type="button">Re-apply</button></div>`
+          : result.ok
+            ? `<div class="row-actions"><span class="ok-status">✓ Applied</span><button class="btn-row-remove" onclick="event.stopPropagation();removeOne('${h(id)}')" type="button">Remove</button></div>`
+            : `<span class="err-status" title="${h(result.msg)}">✗ ${h(result.msg||'Failed')}</span>`)
+      : `<div class="row-actions"><button class="btn-row-apply" id="apply-btn-${h(id)}" onclick="event.stopPropagation();applyOne('${h(id)}')" type="button">Apply</button><button class="btn-row-remove" onclick="event.stopPropagation();removeOne('${h(id)}')" type="button">Remove</button></div>`;
     return `<tr data-id="${h(id)}" onclick="toggleRow(this,'${h(id)}')" id="row-${i}">
       <td onclick="event.stopPropagation()">
         <input type="checkbox" class="row-cb" data-id="${h(id)}" id="cb-${i}" onchange="onCbChange(this,'${h(id)}')">
@@ -546,18 +589,39 @@ async function applyFine() {
     }
   });
   updateStats();
+  renderReport();
   if (success) toast(`Hostel Fine applied to ${success} student${success > 1 ? 's' : ''}`, 'success');
   if (failed)  toast(`Failed for ${failed} student${failed > 1 ? 's' : ''} — see Status column`, 'error');
   btn.disabled = false;
   btn.innerHTML = 'Apply Hostel Fine';
 }
 
+function setRowStatusLoading(cell) {
+  cell.innerHTML = '<span class="spinner" style="width:13px;height:13px;border-width:1.5px;color:var(--primary)"></span>';
+}
+
+function refreshRowStatus(id) {
+  const tr = document.querySelector(`tr[data-id="${id}"]`);
+  if (!tr) return;
+  const cell = tr.querySelector('td:last-child');
+  const result = resultMap.get(id);
+  if (!result) return;
+  if (result.removed) {
+    cell.innerHTML = `<div class="row-actions"><span class="removed-status">Fine Removed</span><button class="btn-row-apply" onclick="event.stopPropagation();applyOne('${h(id)}')" type="button">Re-apply</button></div>`;
+  } else if (result.ok) {
+    cell.innerHTML = `<div class="row-actions"><span class="ok-status">✓ Applied</span><button class="btn-row-remove" onclick="event.stopPropagation();removeOne('${h(id)}')" type="button">Remove</button></div>`;
+  } else {
+    cell.innerHTML = `<div class="row-actions"><span class="err-status" title="${h(result.msg)}">✗ ${h(result.msg||'Failed')}</span><button class="btn-row-apply" onclick="event.stopPropagation();applyOne('${h(id)}')" type="button">Retry</button></div>`;
+  }
+  renderReport();
+}
+
 async function applyOne(id) {
   const installment = document.getElementById('installment-select').value;
   const amount      = getFine(id);
-  const btn         = document.getElementById(`apply-btn-${id}`);
   if (!amount) { toast('Enter a fine amount first', 'error'); return; }
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:1.5px"></span>'; }
+  const tr = document.querySelector(`tr[data-id="${id}"]`);
+  if (tr) setRowStatusLoading(tr.querySelector('td:last-child'));
   const student = allStudents.find(s => s._id === id);
   try {
     const payload = buildPayload(student, amount, installment);
@@ -569,25 +633,106 @@ async function applyOne(id) {
     resultMap.set(id, { ok: false, msg: err.message });
     toast(err.message, 'error');
   }
+  refreshRowStatus(id);
+}
+
+async function removeOne(id) {
+  const installment = document.getElementById('installment-select').value;
   const tr = document.querySelector(`tr[data-id="${id}"]`);
-  if (tr) {
-    const result = resultMap.get(id);
-    tr.querySelector('td:last-child').innerHTML = result.ok
-      ? '<span class="ok-status">✓ Applied</span>'
-      : `<span class="err-status" title="${h(result.msg)}">✗ ${h(result.msg || 'Failed')}</span>`;
+  if (tr) setRowStatusLoading(tr.querySelector('td:last-child'));
+  const student = allStudents.find(s => s._id === id);
+  try {
+    const payload = buildRemovePayload(student, installment);
+    if (!payload) throw new Error('Demand record not found');
+    await apiFetch(`${BASE_FEE}/editStudentDemand/student`, payload);
+    resultMap.set(id, { removed: true });
+    toast(`Fine removed for ${student?.name || id}`, 'info');
+  } catch (err) {
+    resultMap.set(id, { ok: false, msg: err.message });
+    toast(err.message, 'error');
   }
+  refreshRowStatus(id);
+}
+
+function getDemand(student) {
+  const demandDocId = typeof student.studentDemand === 'string' ? student.studentDemand
+    : (student.studentDemand && student.studentDemand._id);
+  return demandMap.get(student._id) || (demandDocId && demandMap.get(demandDocId));
 }
 
 function buildPayload(student, amount, installment) {
-  const demandDocId = typeof student.studentDemand === 'string' ? student.studentDemand
-    : (student.studentDemand && student.studentDemand._id);
-  const demand = demandMap.get(student._id) || (demandDocId && demandMap.get(demandDocId));
+  const demand = getDemand(student);
   if (!demand) return null;
   const demandArr = [...(demand.demand || [])];
   const idx = demandArr.findIndex(d => d.feeHead === 'Hostel Fine' && d.installment === installment);
   if (idx >= 0) demandArr.splice(idx, 1);
   demandArr.push({ feeHead: 'Hostel Fine', installment, amount });
   return { ...demand, demand: demandArr, remark: 'Hostel Fine' };
+}
+
+function buildRemovePayload(student, installment) {
+  const demand = getDemand(student);
+  if (!demand) return null;
+  const demandArr = [...(demand.demand || [])];
+  const idx = demandArr.findIndex(d => d.feeHead === 'Hostel Fine' && d.installment === installment);
+  // Set to 0 (restores default state) rather than removing the entry entirely
+  if (idx >= 0) { demandArr[idx] = { ...demandArr[idx], amount: 0 }; }
+  else { demandArr.push({ feeHead: 'Hostel Fine', installment, amount: 0 }); }
+  return { ...demand, demand: demandArr, remark: 'Fine Removed' };
+}
+
+function renderReport() {
+  const installment = document.getElementById('installment-select').value;
+  const applied = allStudents.filter(s => resultMap.get(s._id)?.ok);
+  const card = document.getElementById('report-card');
+  if (!applied.length) { card.hidden = true; return; }
+  card.hidden = false;
+
+  const total = applied.reduce((sum, s) => sum + (getFine(s._id) || 0), 0);
+  document.getElementById('report-meta').innerHTML = `
+    <div style="background:var(--primary-light);border-radius:8px;padding:8px 16px;font-size:12px;">
+      <strong style="color:var(--primary);font-size:18px;display:block;">${applied.length}</strong>
+      <span style="color:var(--fg-muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">Students</span>
+    </div>
+    <div style="background:var(--primary-light);border-radius:8px;padding:8px 16px;font-size:12px;">
+      <strong style="color:var(--primary);font-size:18px;display:block;">₹${total.toLocaleString('en-IN')}</strong>
+      <span style="color:var(--fg-muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">Total Fine</span>
+    </div>
+    <div style="background:var(--primary-light);border-radius:8px;padding:8px 16px;font-size:12px;">
+      <strong style="color:var(--primary);font-size:18px;display:block;">${h(installment)}</strong>
+      <span style="color:var(--fg-muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em">Installment</span>
+    </div>`;
+
+  document.getElementById('report-body').innerHTML = applied.map((s, i) =>
+    `<tr>
+      <td style="color:var(--fg-muted)">${i + 1}</td>
+      <td><div class="student-name">${h(s.name || 'Unknown')}</div></td>
+      <td class="student-sub">${h(s.regNo || s.rollNo || '—')}</td>
+      <td><div>${h(s.course || s.stream || '—')}</div><div class="student-sub">${h(s.batch || '')}${s.section ? ' · ' + s.section : ''}</div></td>
+      <td>${h(installment)}</td>
+      <td style="text-align:right;font-weight:700;color:var(--primary)">₹${(getFine(s._id)||0).toLocaleString('en-IN')}</td>
+    </tr>`
+  ).join('');
+}
+
+function printReport() {
+  const installment = document.getElementById('installment-select').value;
+  const applied = allStudents.filter(s => resultMap.get(s._id)?.ok);
+  const total = applied.reduce((sum, s) => sum + (getFine(s._id) || 0), 0);
+  const rows = applied.map((s, i) =>
+    `<tr><td>${i+1}</td><td>${h(s.name||'Unknown')}</td><td>${h(s.regNo||s.rollNo||'')}</td><td>${h(s.course||s.stream||'')} ${h(s.batch||'')}${s.section?' · '+s.section:''}</td><td>${h(installment)}</td><td style="text-align:right;font-weight:700">₹${(getFine(s._id)||0).toLocaleString('en-IN')}</td></tr>`
+  ).join('');
+  const win = window.open('', '_blank');
+  win.document.write(`<!doctype html><html><head><title>Hostel Fine Report</title>
+  <style>body{font-family:Arial,sans-serif;padding:24px;font-size:13px}h2{margin:0}p{color:#666;margin:4px 0 20px}table{width:100%;border-collapse:collapse}th{background:#6B1D3C;color:#fff;padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase}td{padding:8px 12px;border-bottom:1px solid #eee}.total{font-weight:700;font-size:14px;margin-top:16px;text-align:right}@media print{button{display:none}}</style>
+  </head><body>
+  <h2>PURAN MURTI VIDYAPEETH</h2>
+  <p>Hostel Fine Report &nbsp;·&nbsp; ${h(installment)} Installment &nbsp;·&nbsp; Session: ${h(SESSION)}</p>
+  <table><thead><tr><th>#</th><th>Student</th><th>Reg No</th><th>Course / Batch</th><th>Installment</th><th style="text-align:right">Fine (₹)</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div class="total">Total: ₹${total.toLocaleString('en-IN')} &nbsp;|&nbsp; ${applied.length} student${applied.length>1?'s':''}</div>
+  <script>window.print();<\/script></body></html>`);
+  win.document.close();
 }
 
 function toast(msg, type = 'info') {
