@@ -388,6 +388,33 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
 
 <div class="main">
 
+  <!-- Auth card (shown when no token in localStorage) -->
+  <div class="card" id="auth-card" hidden style="border: 1.5px solid var(--primary-mid);">
+    <div class="card-title" style="color:var(--primary);">⚠ Auth Required</div>
+    <p style="font-size:12px;color:var(--fg-muted);margin:0 0 14px;">
+      Paste your ERP credentials — found in <strong>localStorage</strong> of <code>school.oderp.in</code>
+      (open DevTools → Application → Local Storage).
+    </p>
+    <div class="filter-row">
+      <div class="form-group" style="flex:3;">
+        <label>JWT Token</label>
+        <input type="password" id="auth-token" placeholder="Paste token from localStorage → token">
+      </div>
+      <div class="form-group">
+        <label>Entity ID</label>
+        <input type="text" id="auth-entity" placeholder="entityId">
+      </div>
+      <div class="form-group">
+        <label>Session</label>
+        <input type="text" id="auth-session" placeholder="e.g. 2025-26">
+      </div>
+      <div class="form-group" style="flex:0 0 auto; min-width:auto;">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" onclick="saveAuth()">Save &amp; Continue</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Filter card -->
   <div class="card">
     <div class="card-title">Filter Students</div>
@@ -474,9 +501,9 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
-const TOKEN   = localStorage.getItem('token')    || '';
-const ENTITY  = localStorage.getItem('entityId') || '';
-const SESSION = localStorage.getItem('session')  || '';
+let TOKEN   = localStorage.getItem('token')    || '';
+let ENTITY  = localStorage.getItem('entityId') || '';
+let SESSION = localStorage.getItem('session')  || '';
 const BASE_FEE    = 'https://admission-api.odpay.in/api';
 const BASE_HOSTEL = 'https://academic-api.odpay.in/api';
 
@@ -484,7 +511,23 @@ let allStudents  = [];
 let studentFines = new Map();   // id -> fine amount (overrides global)
 let resultMap    = new Map();   // id -> {ok, msg}
 
-document.getElementById('session-label').textContent = SESSION || '—';
+// Show auth card if token missing
+(function initAuth() {
+  document.getElementById('session-label').textContent = SESSION || '—';
+  if (!TOKEN) {
+    document.getElementById('auth-card').hidden = false;
+  }
+})();
+
+function saveAuth() {
+  TOKEN   = document.getElementById('auth-token').value.trim();
+  ENTITY  = document.getElementById('auth-entity').value.trim();
+  SESSION = document.getElementById('auth-session').value.trim();
+  if (!TOKEN) { toast('Token is required', 'error'); return; }
+  document.getElementById('auth-card').hidden = true;
+  document.getElementById('session-label').textContent = SESSION || '—';
+  toast('Auth saved — you can now search students', 'success');
+}
 
 function h(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
