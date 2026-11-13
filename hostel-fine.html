@@ -319,7 +319,14 @@ async function loadStudents() {
     const demands = Array.isArray(demandsResp) ? demandsResp : (demandsResp.data || []);
     for (const s of demands) {
       if (s.studentDemand && typeof s.studentDemand === 'object') {
+        // s is a student record with populated studentDemand
         demandMap.set(s._id, s.studentDemand);
+        if (s.studentDemand._id) demandMap.set(s.studentDemand._id, s.studentDemand);
+      } else if (Array.isArray(s.demand)) {
+        // s is a demand document directly
+        demandMap.set(s._id, s);
+        const sid = s.student && typeof s.student === 'object' ? s.student._id : s.student;
+        if (sid) demandMap.set(sid, s);
       }
     }
 
@@ -469,7 +476,10 @@ async function applyFine() {
 }
 
 function buildPayload(student, amount, installment) {
-  const demand = demandMap.get(student._id);
+  // Try student._id, then student.studentDemand (which may be the demand doc's _id)
+  const demandDocId = typeof student.studentDemand === 'string' ? student.studentDemand
+    : (student.studentDemand && student.studentDemand._id);
+  const demand = demandMap.get(student._id) || (demandDocId && demandMap.get(demandDocId));
   if (!demand) return null;
 
   const demandArr = [...(demand.demand || [])];
