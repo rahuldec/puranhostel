@@ -1,5 +1,6 @@
 <title>Hostel Fine</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<link rel="icon" href="https://okiedokie-erp-images.s3.ap-south-1.amazonaws.com/PMV/2026/07/logo/cd3d93b54cd4627514bc-PMVOD.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
 
 <style>
@@ -165,6 +166,13 @@ tbody td { padding: 10px 12px; vertical-align: middle; }
 
 input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
 
+.footer {
+  text-align: center; padding: 20px 16px 32px;
+  color: var(--fg-muted); font-size: 11px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.footer img { height: 20px; width: auto; opacity: 0.85; }
+
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .toast { animation: none; } }
 @media (max-width: 600px) { .fine-row { flex-direction: column; align-items: flex-start; } .stat-pill:nth-child(3) { display: none; } }
 </style>
@@ -182,21 +190,14 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
 
 <div class="main">
 
-  <!-- Filter card -->
+  <!-- Search card -->
   <div class="card">
-    <div class="card-title">Filter Students</div>
+    <div class="card-title">Search Students</div>
     <div class="filter-row">
-      <div class="form-group">
-        <label>Course</label>
-        <select id="filter-course"><option value="">All Courses</option></select>
-      </div>
-      <div class="form-group">
-        <label>Batch / Year</label>
-        <select id="filter-batch"><option value="">All Batches</option></select>
-      </div>
-      <div class="form-group">
-        <label>Section</label>
-        <select id="filter-section"><option value="">All Sections</option></select>
+      <div class="form-group" style="flex:1; min-width:200px;">
+        <label>Name / Reg No</label>
+        <input type="text" id="search-input" placeholder="Enter name or registration number…"
+          onkeydown="if(event.key==='Enter')loadStudents()">
       </div>
       <div class="form-group" style="flex:0 0 auto; min-width:auto;">
         <label>&nbsp;</label>
@@ -237,11 +238,17 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
   <div class="card card-bare">
     <div id="table-container">
       <div class="state-box">
-        <div class="state-icon">🏠</div>
-        <strong>Search hostel students</strong>
-        <p>Use the filter above to load students, then apply the fine</p>
+        <div class="state-icon">🔍</div>
+        <strong>Search students</strong>
+        <p>Enter a name or reg no above and click Search</p>
       </div>
     </div>
+  </div>
+
+  <div class="footer">
+    Powered by
+    <img src="https://okiedokie-erp-images.s3.ap-south-1.amazonaws.com/Okie%20Dokie/2025/12/sourceURL/26aebcbe10f4ac5a3e8b-611ed1b9032568edd4f3-Okie_Dokie_App_icon__2___2_-removebg-preview.png" alt="Okie Dokie">
+    Okie Dokie
   </div>
 
 </div>
@@ -271,9 +278,9 @@ const TOKEN   = localStorage.getItem('token')    || 'eyJhbGciOiJIUzI1NiIsInR5cCI
 const ENTITY  = localStorage.getItem('entityId') || '6a610d0f8d4ad4000f73da4a';
 const SESSION = localStorage.getItem('session')  || '2026-27 Odd';
 const BASE_FEE    = 'https://admission-api.odpay.in/api';
-const BASE_HOSTEL = 'https://academic-api.odpay.in/api';
+const BASE_OTHERS = 'https://others-api.odpay.in/api';
 
-let allStudents  = [];   // from hostelReport/studentReports
+let allStudents  = [];   // from list/student
 let demandMap    = new Map(); // studentId -> full demand object
 let studentFines = new Map();
 let resultMap    = new Map();
@@ -292,25 +299,22 @@ async function apiFetch(url, body) {
 
 /* ——— Load students + demands ——— */
 async function loadStudents() {
-  const course  = document.getElementById('filter-course').value;
-  const batch   = document.getElementById('filter-batch').value;
-  const section = document.getElementById('filter-section').value;
+  const search = (document.getElementById('search-input').value || '').trim();
   const btn = document.getElementById('btn-load');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Loading…';
+  btn.innerHTML = '<span class="spinner"></span> Searching…';
   document.getElementById('table-container').innerHTML =
-    '<div class="state-box"><span class="spinner"></span><p style="margin-top:14px">Fetching hostel students…</p></div>';
+    '<div class="state-box"><span class="spinner"></span><p style="margin-top:14px">Searching students…</p></div>';
 
   try {
-    // Parallel fetch: hostel students + demand docs
-    const [students, demandsResp] = await Promise.all([
-      apiFetch(`${BASE_HOSTEL}/hostelReport/studentReports`, { entity: ENTITY, session: SESSION, hostel: '', batch: batch, class: course }),
+    // Parallel fetch: students + demand docs
+    const [studentsResp, demandsResp] = await Promise.all([
+      apiFetch(`${BASE_OTHERS}/list/student`, { entity: ENTITY, session: SESSION, search }),
       apiFetch(`${BASE_FEE}/fetchStudentDemandForUpdate/student`, { entity: ENTITY, session: SESSION })
     ]);
 
-    allStudents = Array.isArray(students) ? students : (students.data || []);
+    allStudents = Array.isArray(studentsResp) ? studentsResp : (studentsResp.data || studentsResp.students || []);
 
-    // Build demand map: studentId → demand object
     demandMap.clear();
     const demands = Array.isArray(demandsResp) ? demandsResp : (demandsResp.data || []);
     for (const s of demands) {
@@ -319,20 +323,14 @@ async function loadStudents() {
       }
     }
 
-    // Apply section filter client-side
-    let filtered = allStudents;
-    if (section) filtered = filtered.filter(s => (s.section || '') === section);
-
     studentFines.clear();
     resultMap.clear();
 
-    if (!filtered.length) {
+    if (!allStudents.length) {
       document.getElementById('table-container').innerHTML =
-        '<div class="state-box"><div class="state-icon">📭</div><strong>No students found</strong><p>Try adjusting filters</p></div>';
+        '<div class="state-box"><div class="state-icon">📭</div><strong>No students found</strong><p>Try a different name or reg no</p></div>';
       document.getElementById('stat-total').textContent = '0';
     } else {
-      allStudents = filtered;
-      populateFilters(students); // populate from full list
       renderTable();
     }
   } catch (err) {
@@ -343,23 +341,6 @@ async function loadStudents() {
     btn.disabled = false;
     btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search';
   }
-}
-
-function unique(arr) { return [...new Set(arr.filter(Boolean))].sort(); }
-
-function populateFilters(students) {
-  const courses  = unique(students.map(s => s.course  || s.stream));
-  const batches  = unique(students.map(s => s.batch));
-  const sections = unique(students.map(s => s.section));
-  fill('filter-course',  courses,  'All Courses');
-  fill('filter-batch',   batches,  'All Batches');
-  fill('filter-section', sections, 'All Sections');
-}
-
-function fill(id, items, placeholder) {
-  const el = document.getElementById(id), cur = el.value;
-  el.innerHTML = `<option value="">${placeholder}</option>`
-    + items.map(v => `<option value="${h(v)}"${v===cur?' selected':''}>${h(v)}</option>`).join('');
 }
 
 /* ——— Render table ——— */
