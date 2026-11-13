@@ -48,7 +48,8 @@ body::before {
   content: ""; position: fixed; inset: 0 0 auto;
   height: env(safe-area-inset-top,0px); background: var(--primary); z-index: 21;
 }
-.page-header h1 { margin: 0; font-size: 17px; font-weight: 600; }
+.page-header h1 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.2; }
+.page-header .school-sub { font-size: 10px; font-weight: 400; opacity: 0.75; margin-top: 1px; }
 .header-icon {
   width: 32px; height: 32px; background: rgba(255,255,255,0.15);
   border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -156,6 +157,13 @@ tbody td { padding: 10px 12px; vertical-align: middle; }
 
 .ok-status { color: var(--success); font-size: 11px; font-weight: 500; }
 .err-status { color: var(--danger); font-size: 11px; }
+.btn-row-apply {
+  background: var(--primary-light); color: var(--primary); border: 1.5px solid var(--primary-mid);
+  border-radius: 6px; padding: 4px 12px; font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-row-apply:hover { background: var(--primary); color: #fff; }
+.btn-row-apply:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .toast-wrap { position: fixed; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
 .toast { padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.18); animation: toastin 0.2s ease; max-width: 300px; }
@@ -184,7 +192,10 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
       <polyline points="9 22 9 12 15 12 15 22"/>
     </svg>
   </div>
-  <h1>Hostel Fine</h1>
+  <div>
+    <h1>Hostel Fine</h1>
+    <div class="school-sub">PURAN MURTI VIDYAPEETH &nbsp;·&nbsp; Kami Road, Sonepat, Haryana - 131001</div>
+  </div>
   <span class="session-badge" id="session-label">—</span>
 </div>
 
@@ -357,8 +368,10 @@ function renderTable() {
     const fine   = studentFines.has(id) ? studentFines.get(id) : (globalFine || '');
     const result = resultMap.get(id);
     const statusHtml = result
-      ? (result.ok ? '<span class="ok-status">✓ Applied</span>' : `<span class="err-status" title="${h(result.msg)}">✗ Failed</span>`)
-      : '';
+      ? (result.ok
+          ? '<span class="ok-status">✓ Applied</span>'
+          : `<span class="err-status" title="${h(result.msg)}">✗ ${h(result.msg||'Failed')}</span>`)
+      : `<button class="btn btn-row-apply" id="apply-btn-${h(id)}" onclick="event.stopPropagation();applyOne('${h(id)}')" type="button">Apply</button>`;
     return `<tr data-id="${h(id)}" onclick="toggleRow(this,'${h(id)}')" id="row-${i}">
       <td onclick="event.stopPropagation()">
         <input type="checkbox" class="row-cb" data-id="${h(id)}" id="cb-${i}" onchange="onCbChange(this,'${h(id)}')">
@@ -376,7 +389,7 @@ function renderTable() {
           min="0" placeholder="₹"
           oninput="setRowFine('${h(id)}',this.value)" onchange="setRowFine('${h(id)}',this.value)">
       </td>
-      <td>${statusHtml}</td>
+      <td onclick="event.stopPropagation()">${statusHtml}</td>
     </tr>`;
   }).join('');
 
@@ -471,6 +484,33 @@ async function applyFine() {
   if (failed)  toast(`Failed for ${failed} student${failed>1?'s':''} — see Status column`, 'error');
   btn.disabled = false;
   btn.innerHTML = 'Apply Hostel Fine';
+}
+
+async function applyOne(id) {
+  const installment = document.getElementById('installment-select').value;
+  const amount = getFine(id);
+  const btn = document.getElementById(`apply-btn-${id}`);
+  if (!amount) { toast('Enter a fine amount first', 'error'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const student = allStudents.find(s => s._id === id);
+  try {
+    const payload = buildPayload(student, amount, installment);
+    if (!payload) throw new Error('Demand record not found');
+    await apiFetch(`${BASE_FEE}/editStudentDemand/student`, payload);
+    resultMap.set(id, { ok: true });
+    toast(`Fine applied to ${student?.name || id}`, 'success');
+  } catch (err) {
+    resultMap.set(id, { ok: false, msg: err.message });
+    toast(err.message, 'error');
+  }
+  // Update just this row's status cell
+  const tr = document.querySelector(`tr[data-id="${id}"]`);
+  if (tr) {
+    const result = resultMap.get(id);
+    tr.querySelector('td:last-child').innerHTML = result.ok
+      ? '<span class="ok-status">✓ Applied</span>'
+      : `<span class="err-status" title="${h(result.msg)}">✗ ${h(result.msg||'Failed')}</span>`;
+  }
 }
 
 function buildPayload(student, amount, installment) {
