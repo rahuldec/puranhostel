@@ -270,7 +270,7 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
     src="https://okiedokie-erp-images.s3.ap-south-1.amazonaws.com/PMV/2026/07/logo/cd3d93b54cd4627514bc-PMVOD.png"
     alt="PMV">
   <div class="header-center">
-    <div class="header-school">PURAN MURTI VIDYAPEETH</div>
+    <div class="header-school" id="header-school-name">PURAN MURTI VIDYAPEETH</div>
     <div class="header-module">Hostel Fine</div>
     <div class="header-addr">Kami Road, Sonepat, Haryana – 131001</div>
   </div>
@@ -278,6 +278,13 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
 </div>
 
 <div class="main">
+
+  <!-- Campus Selector -->
+  <div class="card" style="padding:12px 16px;">
+    <div class="card-title" style="margin-bottom:8px;">Select Campus</div>
+    <select id="entity-select" class="select" onchange="switchEntity(this.value)" style="width:100%;max-width:480px;">
+    </select>
+  </div>
 
   <!-- Search -->
   <div class="card">
@@ -396,8 +403,31 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
 
 <script>
 const TOKEN   = localStorage.getItem('token')    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiVmlqYXkgUmFuYSIsIm1vYmlsZSI6IjcwMTU4MjEyODIiLCJwYXNzd29yZCI6IjcwMTU4MjEyODIiLCJlbnRpdHkiOiI2YTYxMGQwZjhkNGFkNDAwMGY3M2RhNGEiLCJlbXBsb3llZSI6IjZhOTdjNjdkMGU4MzJmMDAwZjNhMjBmYSIsImVtcGxveWVlSWQiOiI5OTkiLCJlbXBsb3llZVR5cGUiOiJQZXJtYW5lbnQiLCJlbXBsb3llZVBob3RvIjoiL2Fzc2V0cy8vbWVkaWEvYXZhdGFycy9tZW4zLnN2ZyIsInVzZXJUeXBlIjoib2QzIiwic3RhdHVzIjp0cnVlLCJwZXJtaXNzaW9uR3JvdXBOYW1lIjoiQ2FtcHVzIE1hbmFnZXIiLCJlbnRpdHlHcm91cCI6W3siZW50aXR5SWQiOiI2YTYxMGQwZjhkNGFkNDAwMGY3M2RhNGEiLCJuYW1lIjoiUFVSQU4gTVVSVEkgVklEWUFQRUVUSCIsImRpc3BsYXlOYW1lIjoiUFVSQU4gTVVSVEkgVklEWUFQRUVUSCIsInFhYyI6IlBNViIsImVudGl0eVR5cGUiOiJjb2xsZWdlIiwibG9nbyI6Imh0dHBzOi8vb2tpZWRva2llLWVycC1pbWFnZXMuczMuYXAtc291dGgtMS5hbWF6b25hd3MuY29tL1BNVi8yMDI2LzA3L2xvZ28vY2QzZDkzYjU0Y2Q0NjI3NTE0YmMtUE1WT0QucG5nIn1dLCJfaWQiOiI2YTk3YzY3ZDBlODMyZjAwMGYzYTIwZmMiLCJ0b2tlblZlcnNpb24iOjM5LCJpYXQiOjE3ODgzMzE2NDV9.HqNthVz9KfuAh_L-rxfwiN2KSa08cdR8vi6oizurQSU';
-const ENTITY  = localStorage.getItem('entityId') || '6a610d0f8d4ad4000f73da4a';
+const ENTITIES = [
+  { id: '6a610d0f8d4ad4000f73da4a', name: 'PURAN MURTI VIDYAPEETH' },
+  { id: '6a610f2d8d4ad4000f73da73', name: 'PURAN MURTI GLOBAL SCHOOL' },
+  { id: '6a610ec08d4ad4000f73da6b', name: 'PURAN MURTI COLLEGE OF PHARMACY' },
+  { id: '6a610db98d4ad4000f73da58', name: 'PURAN MURTI COLLEGE OF LAW' },
+  { id: '6a6a4db296aefd001042c7f4', name: 'PURAN MURTI PRIVATE ITI' },
+];
+let ENTITY  = localStorage.getItem('entityId') || '6a610d0f8d4ad4000f73da4a';
 const SESSION = localStorage.getItem('session')  || '2026-27 Odd';
+
+function switchEntity(id) {
+  ENTITY = id;
+  localStorage.setItem('entityId', id);
+  const ent = ENTITIES.find(e => e.id === id);
+  document.getElementById('header-school-name').textContent = ent ? ent.name : id;
+  allStudents = []; demandMap.clear(); studentFines.clear(); resultMap.clear();
+  document.getElementById('table-container').innerHTML =
+    '<div class="state-box"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><p>Search for students</p><p class="state-sub">Enter a name or registration number above and press Search</p></div>';
+  document.getElementById('total-count').textContent = '0';
+  document.getElementById('selected-count').textContent = '0';
+  document.getElementById('total-fine').textContent = '₹0';
+  document.getElementById('btn-apply').disabled = true;
+  document.getElementById('search-input').value = '';
+  document.getElementById('entity-select').value = id;
+}
 const BASE_FEE    = 'https://admission-api.odpay.in/api';
 const BASE_OTHERS = 'https://others-api.odpay.in/api';
 
@@ -407,6 +437,20 @@ let studentFines = new Map();
 let resultMap    = new Map();
 
 document.getElementById('session-label').textContent = SESSION;
+
+// Populate entity dropdown
+(function() {
+  const sel = document.getElementById('entity-select');
+  ENTITIES.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e.id;
+    opt.textContent = e.name;
+    if (e.id === ENTITY) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  const current = ENTITIES.find(e => e.id === ENTITY);
+  if (current) document.getElementById('header-school-name').textContent = current.name;
+})();
 
 function h(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function hdrs() { return { 'Authorization': TOKEN, 'Content-Type': 'application/json' }; }
