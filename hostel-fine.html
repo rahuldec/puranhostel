@@ -404,10 +404,10 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary)
 <script>
 const TOKEN   = localStorage.getItem('token')    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiVmlqYXkgUmFuYSIsIm1vYmlsZSI6IjcwMTU4MjEyODIiLCJwYXNzd29yZCI6IjcwMTU4MjEyODIiLCJlbnRpdHkiOiI2YTYxMGQwZjhkNGFkNDAwMGY3M2RhNGEiLCJlbXBsb3llZSI6IjZhOTdjNjdkMGU4MzJmMDAwZjNhMjBmYSIsImVtcGxveWVlSWQiOiI5OTkiLCJlbXBsb3llZVR5cGUiOiJQZXJtYW5lbnQiLCJlbXBsb3llZVBob3RvIjoiL2Fzc2V0cy8vbWVkaWEvYXZhdGFycy9tZW4zLnN2ZyIsInVzZXJUeXBlIjoib2QzIiwic3RhdHVzIjp0cnVlLCJwZXJtaXNzaW9uR3JvdXBOYW1lIjoiQ2FtcHVzIE1hbmFnZXIiLCJlbnRpdHlHcm91cCI6W3siZW50aXR5SWQiOiI2YTYxMGQwZjhkNGFkNDAwMGY3M2RhNGEiLCJuYW1lIjoiUFVSQU4gTVVSVEkgVklEWUFQRUVUSCIsImRpc3BsYXlOYW1lIjoiUFVSQU4gTVVSVEkgVklEWUFQRUVUSCIsInFhYyI6IlBNViIsImVudGl0eVR5cGUiOiJjb2xsZWdlIiwibG9nbyI6Imh0dHBzOi8vb2tpZWRva2llLWVycC1pbWFnZXMuczMuYXAtc291dGgtMS5hbWF6b25hd3MuY29tL1BNVi8yMDI2LzA3L2xvZ28vY2QzZDkzYjU0Y2Q0NjI3NTE0YmMtUE1WT0QucG5nIn1dLCJfaWQiOiI2YTk3YzY3ZDBlODMyZjAwMGYzYTIwZmMiLCJ0b2tlblZlcnNpb24iOjM5LCJpYXQiOjE3ODgzMzE2NDV9.HqNthVz9KfuAh_L-rxfwiN2KSa08cdR8vi6oizurQSU';
 const ENTITIES = [
-  { id: '6a610d0f8d4ad4000f73da4a', name: 'PURAN MURTI VIDYAPEETH' },
-  { id: '6a610ec08d4ad4000f73da6b', name: 'PURAN MURTI COLLEGE OF PHARMACY' },
-  { id: '6a610db98d4ad4000f73da58', name: 'PURAN MURTI COLLEGE OF LAW' },
-  { id: '6a6a4db296aefd001042c7f4', name: 'PURAN MURTI PRIVATE ITI' },
+  { id: '6a610d0f8d4ad4000f73da4a', name: 'PURAN MURTI VIDYAPEETH',          installments: ['Previous','Odd','Even'], defaultInstallment: 'Odd' },
+  { id: '6a610ec08d4ad4000f73da6b', name: 'PURAN MURTI COLLEGE OF PHARMACY',  installments: ['Previous','Odd','Even'], defaultInstallment: 'Odd' },
+  { id: '6a610db98d4ad4000f73da58', name: 'PURAN MURTI COLLEGE OF LAW',       installments: ['Previous','Odd','Even'], defaultInstallment: 'Odd' },
+  { id: '6a6a4db296aefd001042c7f4', name: 'PURAN MURTI PRIVATE ITI',          installments: ['Annual'],               defaultInstallment: 'Annual' },
 ];
 let ENTITY  = localStorage.getItem('entityId') || '6a610d0f8d4ad4000f73da4a';
 let SESSION = localStorage.getItem('session')  || '2026-27 Odd';
@@ -450,11 +450,16 @@ async function switchEntity(id) {
   SESSION = await fetchEntitySession(id);
   localStorage.setItem('session', SESSION);
   document.getElementById('session-label').textContent = SESSION;
-  const installment = SESSION.split(' ').pop();
+
   const instSel = document.getElementById('installment-select');
-  if (instSel) {
-    for (const opt of instSel.options) {
-      if (opt.value === installment) { opt.selected = true; break; }
+  if (instSel && ent) {
+    instSel.innerHTML = '';
+    for (const inst of ent.installments) {
+      const opt = document.createElement('option');
+      opt.value = inst;
+      opt.textContent = inst;
+      if (inst === ent.defaultInstallment) opt.selected = true;
+      instSel.appendChild(opt);
     }
   }
 
@@ -482,7 +487,20 @@ document.getElementById('session-label').textContent = SESSION;
     sel.appendChild(opt);
   });
   const current = ENTITIES.find(e => e.id === ENTITY);
-  if (current) document.getElementById('header-school-name').textContent = current.name;
+  if (current) {
+    document.getElementById('header-school-name').textContent = current.name;
+    const instSel = document.getElementById('installment-select');
+    if (instSel) {
+      instSel.innerHTML = '';
+      for (const inst of current.installments) {
+        const opt = document.createElement('option');
+        opt.value = inst;
+        opt.textContent = inst;
+        if (inst === current.defaultInstallment) opt.selected = true;
+        instSel.appendChild(opt);
+      }
+    }
+  }
 })();
 
 function h(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
