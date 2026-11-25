@@ -411,22 +411,56 @@ const ENTITIES = [
   { id: '6a6a4db296aefd001042c7f4', name: 'PURAN MURTI PRIVATE ITI' },
 ];
 let ENTITY  = localStorage.getItem('entityId') || '6a610d0f8d4ad4000f73da4a';
-const SESSION = localStorage.getItem('session')  || '2026-27 Odd';
+let SESSION = localStorage.getItem('session')  || '2026-27 Odd';
 
-function switchEntity(id) {
+async function fetchEntitySession(entityId) {
+  const knownSessions = ['2026-27 Odd', '2026-27 Even', '2026-27 Previous'];
+  for (const sess of knownSessions) {
+    try {
+      const r = await fetch(`${BASE_OTHERS}/list/student`, {
+        method: 'POST',
+        headers: { 'Authorization': TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity: entityId, session: sess, search: 'a' })
+      });
+      const d = await r.json();
+      const arr = Array.isArray(d) ? d : (d.data || []);
+      if (arr.length > 0) {
+        const s = arr[0];
+        return s.session || sess;
+      }
+    } catch {}
+  }
+  return SESSION;
+}
+
+async function switchEntity(id) {
   ENTITY = id;
   localStorage.setItem('entityId', id);
   const ent = ENTITIES.find(e => e.id === id);
   document.getElementById('header-school-name').textContent = ent ? ent.name : id;
   allStudents = []; demandMap.clear(); studentFines.clear(); resultMap.clear();
   document.getElementById('table-container').innerHTML =
-    '<div class="state-box"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><p>Search for students</p><p class="state-sub">Enter a name or registration number above and press Search</p></div>';
+    '<div class="state-box"><span class="spinner"></span><p style="margin-top:16px">Loading campus settings…</p></div>';
   document.getElementById('total-count').textContent = '0';
   document.getElementById('selected-count').textContent = '0';
   document.getElementById('total-fine').textContent = '₹0';
   document.getElementById('btn-apply').disabled = true;
   document.getElementById('search-input').value = '';
   document.getElementById('entity-select').value = id;
+
+  SESSION = await fetchEntitySession(id);
+  localStorage.setItem('session', SESSION);
+  document.getElementById('session-label').textContent = SESSION;
+  const installment = SESSION.split(' ').pop();
+  const instSel = document.getElementById('installment-select');
+  if (instSel) {
+    for (const opt of instSel.options) {
+      if (opt.value === installment) { opt.selected = true; break; }
+    }
+  }
+
+  document.getElementById('table-container').innerHTML =
+    '<div class="state-box"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><p>Search for students</p><p class="state-sub">Enter a name or registration number above and press Search</p></div>';
 }
 const BASE_FEE    = 'https://admission-api.odpay.in/api';
 const BASE_OTHERS = 'https://others-api.odpay.in/api';
