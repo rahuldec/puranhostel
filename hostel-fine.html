@@ -440,9 +440,9 @@ async function switchEntity(id) {
   allStudents = []; demandMap.clear(); studentFines.clear(); resultMap.clear();
   document.getElementById('table-container').innerHTML =
     '<div class="state-box"><span class="spinner"></span><p style="margin-top:16px">Loading campus settings…</p></div>';
-  document.getElementById('total-count').textContent = '0';
-  document.getElementById('selected-count').textContent = '0';
-  document.getElementById('total-fine').textContent = '₹0';
+  document.getElementById('stat-total').textContent = '—';
+  document.getElementById('stat-selected').textContent = '0';
+  document.getElementById('stat-amount').textContent = '₹0';
   document.getElementById('btn-apply').disabled = true;
   document.getElementById('search-input').value = '';
   document.getElementById('entity-select').value = id;
